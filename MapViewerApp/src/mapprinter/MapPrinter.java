@@ -5,58 +5,118 @@
  */
 package mapprinter;
 
-import com.sun.prism.image.Coords;
 import java.awt.Point;
 import java.io.File;
 import javafx.application.Application;
-import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.*;
-import javafx.scene.layout.HBox;
-import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
+import javafx.scene.Group;
+import javafx.scene.Parent;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
 import mapprinter.data.Matrice;
 
 public class MapPrinter extends Application {
 
-    private static final int APP_W = 1012;
-    private static final int APP_H = 600;
-    private static final String DATA_PATH = ".";
+    private static int appW = 1012;
+    private static int appH = 600;
+    public static final String DATA_PATH = "./";
     public static final int SIZE_BLOCK_SIDE = 1024;
     
     private Point currentIndex = new Point(0, 0);
-    private int currentZoom = 1;
+    private int currentZoom = 2;
     
     private List<File> fileLoaded = new ArrayList<>();
     private Map<String,Matrice> matricesFiles = new HashMap<>();
     
     private Scene scene;
+    private Pane root;
+    private  ImageView imageView;
+    
+    private int mouseClickedX = -1;
+    private int mouseClickedY = -1;
+    
+    private int maxZoom = 3;
 
     private Parent createContent() {
         Image image = null;
-        byte[] imageData = imageToData(image);
-
-        byte[] modifiedImageData = modify(imageData);
-        Image modifiedImage = dataToImage(modifiedImageData);
-
-        HBox root = new HBox(25);
-        root.getChildren().addAll(new ImageView(image), new ImageView(modifiedImage));
-
+        updateFile();
+        Image modifiedImage = dataToImage();
+        imageView = new ImageView(modifiedImage);
+        
+        root = new Pane(imageView);
+        
+        imageView.setOnMousePressed(value->{
+            mouseClickedX = (int)value.getX();
+            mouseClickedY = (int)value.getY();
+        });
+        
+        imageView.setOnMouseDragged(value->{
+            int newX = currentIndex.x + (mouseClickedX - (int)value.getX());
+            int newY = currentIndex.y + (mouseClickedY-(int)value.getY());
+            
+            mouseClickedX = (int)value.getX();
+            mouseClickedY = (int)value.getY();
+            
+            if(checkDragOk(newX, newY)){
+                currentIndex.x = newX;
+                currentIndex.y = newY;
+                Image modifImage = dataToImage();
+            
+                imageView.setImage(modifImage);
+            }
+        });
+        
+        
+        imageView.setOnMouseReleased(value->{
+            mouseClickedX = -1;
+            mouseClickedY = -1;
+            updateFile();
+            Image modifImage = dataToImage();
+            imageView.setImage(modifImage);
+           });
+        
+        imageView.setOnScroll(value->{
+            if((int)value.getDeltaY()< 0 && currentZoom > 1)
+                currentZoom--;
+            else if((int)value.getDeltaY()> 0 && currentZoom < maxZoom)
+                currentZoom++;
+            
+            if(!checkDragOk(currentIndex.x, currentIndex.y)){
+                currentIndex.x = 0;
+                currentIndex.y = 0;
+            }
+            
+            updateFile();
+            
+            Image modifImage = dataToImage();
+            imageView.setImage(modifImage);
+        });
+            
         return root;
+    }
+    
+    public boolean checkDragOk(int x, int y){
+        return (x + SIZE_BLOCK_SIDE) < currentZoom * SIZE_BLOCK_SIDE &&
+               (y + SIZE_BLOCK_SIDE) < currentZoom * SIZE_BLOCK_SIDE &&
+                x > 0 &&
+                y > 0;
     }
     
     private void updateFile(){
         int x_min = currentIndex.x /SIZE_BLOCK_SIDE ;
-        int x_max = (currentIndex.x + (int)scene.getWidth()) / SIZE_BLOCK_SIDE;
+        int x_max = (currentIndex.x + appW) / SIZE_BLOCK_SIDE;
         
         int y_min = currentIndex.y / SIZE_BLOCK_SIDE;
-        int y_max = (currentIndex.y + (int)scene.getHeight()) / SIZE_BLOCK_SIDE;
+        int y_max = (currentIndex.y + appH) / SIZE_BLOCK_SIDE;
         
         List<File> removeList = new ArrayList<>();
         
@@ -83,7 +143,6 @@ public class MapPrinter extends Application {
                 }
             }
         }
-        
     }
 
     /**
@@ -98,44 +157,30 @@ public class MapPrinter extends Application {
         return data;
     }
 
-    private byte[] imageToData(Image image) {
-        int width = (int) image.getWidth();
-        int height = (int) image.getHeight();
 
-        byte[] data = new byte[width * height * 4];
-
-        int i = 0;
-
-        for (int y = 0; y < height; y++){
-            for (int x = 0; x < width; x++){
-                int argb = image.getPixelReader().getArgb(x, y);
-
-                byte[] pixelData = ByteBuffer.allocate(4).putInt(argb).array();
-
-                data[i++] = pixelData[0];
-                data[i++] = pixelData[1];
-                data[i++] = pixelData[2];
-                data[i++] = pixelData[3];
-            }
-        }
-
-        return data;
-    }
-
-    private Image dataToImage(byte[] data) {
+    private Image dataToImage() {
         // if we don't know the image size beforehand we can encode width and height
         // into image data too
-        WritableImage image = new WritableImage(APP_W / 2, APP_H);
+        WritableImage image = new WritableImage(appW, appH);
         PixelWriter writer = image.getPixelWriter();
 
-        int i = 0;
-        for (int y = 0; y < APP_H; y++) {
-            for (int x = 0; x < APP_W / 2; x++) {
-                int argb = ByteBuffer.wrap(Arrays.copyOfRange(data, i, i + 4)).getInt();
-
-                writer.setArgb(x, y, argb);
-
-                i += 4;
+        for (int y = 0; y < appH; y++) {
+            for (int x = 0; x < appW; x++) {
+                int fileIndexX = (currentIndex.x + x)/SIZE_BLOCK_SIDE;
+                int fileIndexY = (currentIndex.y + y)/SIZE_BLOCK_SIDE;
+                
+                int indexInFileX = (currentIndex.x + x) - fileIndexX*SIZE_BLOCK_SIDE;
+                int indexInFileY = (currentIndex.y + y) - fileIndexY*SIZE_BLOCK_SIDE;
+                
+                if(matricesFiles.containsKey(fileIndexX + "," + fileIndexY)){
+                    int argb = matricesFiles.get(fileIndexX + "," + fileIndexY).getHigh(indexInFileX, indexInFileY);
+               
+                    writer.setArgb(x, y, argb);
+         
+                    writer.setColor(x, y, new Color((float)argb/256, 0.1, 0.1, 1));
+                }
+                else
+                    writer.setColor(x, y, new Color(1, 1, 1, 1));
             }
         }
 
@@ -144,6 +189,7 @@ public class MapPrinter extends Application {
 
     @Override
     public void start(Stage stage) throws Exception {
+        stage.setResizable(false);
         this.scene = new Scene(createContent());
         stage.setScene(scene);
         stage.show();
@@ -151,5 +197,9 @@ public class MapPrinter extends Application {
 
     public static void main(String[] args) {
         launch(args);
+    }
+
+    private Group Group() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 }

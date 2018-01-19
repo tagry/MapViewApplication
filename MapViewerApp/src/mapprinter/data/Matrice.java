@@ -27,35 +27,42 @@ public class Matrice {
         try {
             reader = new FileReader(f);
             char charRead;
+            int intRead = reader.read();
             int x = 0;
             int y = 0;
             String high = "";
-            
-            while((charRead = (char)reader.read()) != charRead-1){
+            int c = 0;
+            while(intRead != -1){
+                charRead = (char) intRead;
                 switch (charRead) {
                     case ',':
                         matrice[y][x] = Integer.parseInt(high);
+                        high = "";
                         x++;
                         break;
                     case '\n':
+                        c++;
                         matrice[y][x] = Integer.parseInt(high);
                         y++;
                         x = 0;
-                        break;
+                        high = "";
+                        break;                       
                     default:
                         high += charRead;
                         break;
-                }                    
+                } 
+                intRead = reader.read();
             }     
             
         } catch (FileNotFoundException ex) {
+            System.err.println("File path : " + f.getAbsolutePath() );
             Logger.getLogger(Matrice.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
             Logger.getLogger(Matrice.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
     
-    public int get(int x, int y){
+    public int getHigh(int x, int y){
         return matrice[y][x];
     }
 }
